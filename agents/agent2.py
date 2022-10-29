@@ -2,6 +2,8 @@ from dahuffman import HuffmanCodec
 from dahuffman import load_shakespeare
 import sys
 import math
+from reedsolo import RSCodec
+
 
 
 # def nthperm(l, n):
@@ -42,12 +44,26 @@ def perm_decode(value, n):
 
 class Agent:
     def __init__(self):
-        self.codec = load_shakespeare()
-        self.N = 15 # only modify bottom N cards
+       # self.codec = load_shakespeare()
+        self.codec = HuffmanCodec.from_data("aaaabbbccddeeffghiiFA:SJFIOPQWE{ORb'apple' \x1 f'FIEUYBMXC<ZXCBVA:jklmnoporeloopappleeopqr\\stuvwxyzhello world how are you doing today foo bar l''orem ip'sum '///bbb123456789 97")
+        self.N = 20 # only modify bottom N cards
+        self.rsc = RSCodec(3)
+        self.RS = True
 
     def encode(self, message):
-        encoded = self.codec.encode(message)
-        perm = int.from_bytes(encoded, byteorder='big')
+        #huffman
+        
+        if self.RS:
+            rs_encoded = (self.rsc.encode(bytes(message,'utf-8')))
+            #print("RS_ENCODED: "+rs_encoded.decode('utf-8'))
+            rs_encoded = bytes(rs_encoded)
+            huff_encoded = self.codec.encode(rs_encoded)
+
+        perm = int.from_bytes(huff_encoded, byteorder='big')
+        print(perm)
+
+        if perm > math.factorial(self.N):
+            print("error")
         ordered_deck = perm_decode(perm, self.N) # perm may be larger than N; need to change later
         deck = list(range(52-self.N)) + [card+(52-self.N) for card in ordered_deck]
         return deck
@@ -78,5 +94,10 @@ class Agent:
         perm = perm_encode(ordered_deck)
         byte_length = (max(perm.bit_length(), 1) + 7) // 8
         b = (perm).to_bytes(byte_length, byteorder='big')
-        msg = self.codec.decode(b)
-        return msg
+        
+    
+        if self.RS:
+            huff_msg = self.codec.decode(b)
+            print(huff_msg)
+            RS_msg = self.rsc.decode(huff_msg)[0].decode('utf-8')
+        return RS_msg
