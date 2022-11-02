@@ -4,6 +4,7 @@ from dahuffman import load_shakespeare
 import sys
 import math
 import numpy as np
+import re
 
 def english_codec_w_digit():
     # TODO: special characters?
@@ -54,7 +55,9 @@ class Agent:
         truncated = False
         recognizable_chars = self.codec.get_code_table().keys()
         new_s = ''
-        for c in s.lower():
+        s = re.sub('\s\s+', ' ', s.lower())
+        s = s.replace('\t', ' ')
+        for c in s:
             if c in recognizable_chars:
                 new_s += c
             else:
@@ -134,7 +137,7 @@ class Agent:
 
     def decode(self, deck):
         N_MAX = self.N_MAX 
-        n_decode = 0
+        n_decode = 2
         perm = -1
         passed_check = False
         
