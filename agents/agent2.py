@@ -73,12 +73,16 @@ class Agent:
 
     def truncate_and_encode(self, s):
         # truncate
+        truncated = False
         max_perm = math.factorial(self.N_MAX)
         perm = float('inf')
         while perm > max_perm:
             encoded = self.codec.encode(s)
             encoded = self.add_checksum(encoded)
             perm = int.from_bytes(encoded, byteorder='big')
+            perm = self.add_partial_flag(perm)
+            if perm > max_perm:
+                truncated = True
             s = s[:-1] # note that the last truncation is not counted
 
         #print("ENCODED" + str(encoded))
@@ -91,7 +95,17 @@ class Agent:
         self.N = N
         self.start = 52 - self.N 
 
-        return perm
+        return perm, truncated
+
+    def add_partial_flag(self, perm, partial=False):
+        '''Add one bit to the end of byte'''
+        return (perm << 1) + int(partial)
+
+    def remove_partial_flag(self, perm):
+        '''Remove last bit'''
+        partial = bool(perm - (perm >> 1 << 1))
+        return perm >> 1, partial
+
 
     def add_checksum(self,message):
         checksum = self.checksum - sum(message)
@@ -102,10 +116,15 @@ class Agent:
         return new_message
 
     def encode(self, message):
-       # print("message: " + message)
+        partial = False
+        # print("message: " + message)
         message, truncated = self.clean_text(message)
+        partial |= truncated
         #print("message: " + message)
-        perm = self.truncate_and_encode(message)
+        perm, truncated = self.truncate_and_encode(message)
+        partial |= truncated
+        perm, _ = self.remove_partial_flag(perm)
+        perm = self.add_partial_flag(perm, partial)
         #print("trunc and encode: " + str(perm))
         ordered_deck = perm_decode(perm, self.N)
         #print("ordered deck: " + str(ordered_deck))
@@ -128,6 +147,7 @@ class Agent:
             #print("perm: " + str(perm))
             n_decode += 1
             if perm > 0:
+                perm, partial = self.remove_partial_flag(perm)
                 byte_length = (max(perm.bit_length(), 1) + 7) // 8
                 b = (perm).to_bytes(byte_length, byteorder='big')
                 cs = int.from_bytes(b[-2:], byteorder='big')
@@ -146,4 +166,6 @@ class Agent:
             msg = "NULL"
         else:
             msg = self.codec.decode(b[:-2])
+            if partial:
+                msg  = 'PARTIAL: ' + msg
         return msg
