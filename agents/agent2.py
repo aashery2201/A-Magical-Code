@@ -133,19 +133,20 @@ class Agent:
         return deck
 
     def decode(self, deck):
-        N_MAX = self.N_MAX + 1
-        n_decode = 1
+        N_MAX = self.N_MAX 
+        n_decode = 0
         perm = -1
         passed_check = False
         
         while perm <= 0 and n_decode <= N_MAX and not(passed_check):
 
+            n_decode += 1 # do not put this after retrieve_coded_cards... N_MAX would be wrong
             ordered_deck = self.retrieve_coded_cards(deck, n_decode)
             #if n_decode == N_MAX: print(ordered_deck)
 
             perm = perm_encode(ordered_deck)
             #print("perm: " + str(perm))
-            n_decode += 1
+
             if perm > 0:
                 perm, partial = self.remove_partial_flag(perm)
                 byte_length = (max(perm.bit_length(), 1) + 7) // 8
