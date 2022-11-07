@@ -7,7 +7,7 @@ import numpy as np
 import re, pickle
 import copy, itertools
 
-vocab_paths = ['', '', '', '', '', '', 'messages/agent2/g7_vocab.txt', '']
+vocab_paths = ['', '', '', '', '', 'messages/agent2/g6_vocab.txt', 'messages/agent2/g7_vocab.txt', 'messages/agent2/g8_vocab.txt']
 
 def english_codec_w_digit():
     # https://en.wikipedia.org/wiki/Letter_frequency
@@ -20,8 +20,8 @@ def english_codec_w_digit():
     freq_table = {c:f for c, f in zip(chars, freq)}
     return HuffmanCodec.from_frequencies(freq_table) # 37 characters
 
-def get_g7_map(codec, mode, length):
-        with open(vocab_paths[6], 'r') as f:
+def get_map(codec, mode, length, group):
+        with open(vocab_paths[group-1], 'r') as f:
             vocab = f.read().replace('\t', '').split('\n')
 
         # rank by bits needed to encode each combination
@@ -164,18 +164,19 @@ class Agent:
     def decode_default(self, b):
         return self.codec.decode(b)
 
-    def encode_g7(self, message):
+    def encode_w_vocab(self, message, group):
         length = 3 # 37^3 = 50653
         partial = False
 
         self.codec = english_codec_w_digit()
 
         # map word in vocab to 3-char permutations
-        encode_map = get_g7_map(self.codec, mode='encode', length=length)
+        encode_map = get_map(self.codec, mode='encode', length=length, group=group)
         em = encode_map
 
-        words = message.lower().split(' ')
+        words = message.split(' ') if group == 8 else message.lower().split(' ')
         short_message = ''
+
         for w in words:
             if w in encode_map:
                 short_message += encode_map[w]
@@ -187,18 +188,21 @@ class Agent:
 
         return perm, partial
 
-    def decode_g7(self, b):
+    def decode_w_vocab(self, b, group):
         short_message = self.codec.decode(b)
         print(short_message)
-        decode_map = get_g7_map(self.codec, mode='decode', length=3)
+        decode_map = get_map(self.codec, mode='decode', length=3, group=group)
         words = []
         for i in range(len(short_message) // 3):
-            words.append(decode_map[short_message[3*i:3*i+3]])
+            mapped_word = short_message[3*i:3*i+3]
+            if mapped_word in decode_map:
+                words.append(decode_map[mapped_word])
         return ' '.join(words)
 
     def encode(self, message):
         # TODO: select encoder with the smallest perm
-        perm, partial = self.encode_g7(message)
+        group = 6
+        perm, partial = self.encode_w_vocab(message, group=group)
         choice = 1
 
         # use 1 bit to encode partial
@@ -250,7 +254,8 @@ class Agent:
             msg = "NULL"
         else:
             # TODO: select decoder
-            msg = self.decode_g7(b[:-2])
+            group = 6
+            msg = self.decode_w_vocab(b[:-2], group=group)
             if partial:
                 msg  = 'PARTIAL: ' + msg
         return msg
