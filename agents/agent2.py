@@ -4,20 +4,47 @@ from dahuffman import load_shakespeare
 import sys
 import math
 import numpy as np
-import re
+import re, pickle
+import copy, itertools
 
-vocab_paths = ['', '', '', '', '', '', '../messages/agent2/g7_vocab.txt', '']
+vocab_paths = ['', '', '', '', '', '', 'messages/agent2/g7_vocab.txt', '']
 
 def english_codec_w_digit():
     # https://en.wikipedia.org/wiki/Letter_frequency
     letter_freq = np.array([8.167, 1.492, 2.782, 4.253, 12.702, 2.228, 2.015, 6.094, 6.966, 0.153, 0.772, 4.025, 2.406, 6.749, 7.507, 1.929, 0.095, 5.987, 6.327, 9.056, 2.758, 0.978, 2.36, 0.15, 1.974, 0.074])
-    letter_freq = letter_freq / letter_freq.sum() * 0.92 # reserve 92% for lettes
+    letter_freq = letter_freq / letter_freq.sum() * 0.92 # reserve 92% for letters
     digit_freq = np.ones(10) / letter_freq.sum() * 0.03 # reserve 3% for digits
     space_freq = np.ones(1) * 0.05 # reserve 5% for space
     freq = np.concatenate([letter_freq/100*95, digit_freq, space_freq]).tolist()
     chars = list(map(chr, range(97, 123))) + list(map(str, range(10))) + [' ']
     freq_table = {c:f for c, f in zip(chars, freq)}
     return HuffmanCodec.from_frequencies(freq_table) # 37 characters
+
+def get_g7_map(codec, mode, length):
+        with open(vocab_paths[6], 'r') as f:
+            vocab = f.read().replace('\t', '').split('\n')
+
+        # rank by bits needed to encode each combination
+        chars = list(codec.get_code_table().keys())[1:]
+        code_table = codec.get_code_table()
+        all_combi = [(combi, sum([code_table[c][0] for c in combi])) for combi in itertools.combinations_with_replacement(chars, length)]
+        ranked_combi = [combi for combi, _ in sorted(all_combi, key=lambda x:x[1])]
+
+        # map word in vocab to 3-char permutations
+        str_map = {}
+        i = 0
+        for combi in ranked_combi:
+            target_strs = set([''.join(p) for p in itertools.permutations(combi)])
+            for target in target_strs:
+                if mode == 'encode':
+                    str_map[vocab[i]] = target
+                else:
+                    str_map[target] = vocab[i]
+                i += 1
+                if i >= len(vocab): break
+            if i >= len(vocab): break
+
+        return str_map
 
 def perm_encode(A):
     if len(A) == 0:
@@ -90,12 +117,11 @@ class Agent:
                 s = s[:-1] 
                 truncated = True
 
+        print(s)
         N = 4
         while math.factorial(N) <= perm:
             N += 1
-
         self.N = N
-        self.start = 52 - self.N 
 
         perm, _ = self.remove_encoder_choice(perm)
         perm, _ = self.remove_partial_flag(perm)
@@ -139,21 +165,40 @@ class Agent:
         return self.codec.decode(b)
 
     def encode_g7(self, message):
-        with open(vocab_paths[7], 'r') as f:
-            vocab = f.read().split('\n')
         length = 3 # 37^3 = 50653
+        partial = False
 
         self.codec = english_codec_w_digit()
 
-        # TODO: encode each combination of chars and rank length
+        # map word in vocab to 3-char permutations
+        encode_map = get_g7_map(self.codec, mode='encode', length=length)
+        em = encode_map
 
-        perm = 0
-        partial = False
+        words = message.lower().split(' ')
+        short_message = ''
+        for w in words:
+            if w in encode_map:
+                short_message += encode_map[w]
+            else:
+                partial = True
+
+        perm, truncated = self.truncate_and_encode(short_message)
+        partial |= truncated
+
         return perm, partial
+
+    def decode_g7(self, b):
+        short_message = self.codec.decode(b)
+        print(short_message)
+        decode_map = get_g7_map(self.codec, mode='decode', length=3)
+        words = []
+        for i in range(len(short_message) // 3):
+            words.append(decode_map[short_message[3*i:3*i+3]])
+        return ' '.join(words)
 
     def encode(self, message):
         # TODO: select encoder with the smallest perm
-        perm, partial = self.encode_default(message)
+        perm, partial = self.encode_g7(message)
         choice = 1
 
         # use 1 bit to encode partial
@@ -163,6 +208,8 @@ class Agent:
         perm = self.add_encoder_choice(perm, choice)
 
         ordered_deck = perm_decode(perm, self.N)
+        #print(self.N, ordered_deck)
+        self.start = 52 - self.N 
         deck = list(range(self.start)) + [card+self.start for card in ordered_deck]
         return deck
 
@@ -176,6 +223,7 @@ class Agent:
 
             n_decode += 1 # do not put this after retrieve_coded_cards... N_MAX would be wrong
             ordered_deck = self.retrieve_coded_cards(deck, n_decode)
+            #print(n_decode, ordered_deck)
             #if n_decode == N_MAX: print(ordered_deck)
 
             perm = perm_encode(ordered_deck)
@@ -198,11 +246,11 @@ class Agent:
         # b'\xc4N\xb1\xc7\x19\xc4\xc7RK4\x92\xcd8\xf9i'
         # [14, 21, 25, 0, 15, 5, 32, 22, 29, 26, 16, 6, 19, 30, 31, 9, 23, 20, 27, 8, 12, 3, 18, 7, 24, 10, 28, 17, 1, 4, 13, 2, 11]
         if n_decode > N_MAX:
-            print(n_decode)
+            #print(n_decode)
             msg = "NULL"
         else:
             # TODO: select decoder
-            msg = self.decode_default(b[:-2])
+            msg = self.decode_g7(b[:-2])
             if partial:
                 msg  = 'PARTIAL: ' + msg
         return msg
