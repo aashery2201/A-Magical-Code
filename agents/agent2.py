@@ -8,14 +8,14 @@ import re, pickle
 import copy, itertools
 import hashlib, base64
 
-vocab_paths = ['', '', '', '', '', 'messages/agent2/g6_vocab.txt', 'messages/agent2/g7_vocab.txt', 'messages/agent2/g8_vocab.txt']
+vocab_paths = ['', '', 'messages/agent2/g3_vocab.txt', '', '', 'messages/agent2/g6_vocab.txt', 'messages/agent2/g7_vocab.txt', 'messages/agent2/g8_vocab.txt']
 
-def english_codec_w_digit():
+def english_codec_w_digit(letter_p=0.92, digit_p=0.03, space_p=0.05):
     # https://en.wikipedia.org/wiki/Letter_frequency
     letter_freq = np.array([8.167, 1.492, 2.782, 4.253, 12.702, 2.228, 2.015, 6.094, 6.966, 0.153, 0.772, 4.025, 2.406, 6.749, 7.507, 1.929, 0.095, 5.987, 6.327, 9.056, 2.758, 0.978, 2.36, 0.15, 1.974, 0.074])
-    letter_freq = letter_freq / letter_freq.sum() * 0.92 # reserve 92% for letters
-    digit_freq = np.ones(10) / letter_freq.sum() * 0.03 # reserve 3% for digits
-    space_freq = np.ones(1) * 0.05 # reserve 5% for space
+    letter_freq = letter_freq / letter_freq.sum() * letter_p # reserve 92% for letters
+    digit_freq = np.ones(10) / letter_freq.sum() * digit_p # reserve 3% for digits
+    space_freq = np.ones(1) * space_p # reserve 5% for space
     freq = np.concatenate([letter_freq/100*95, digit_freq, space_freq]).tolist()
     chars = list(map(chr, range(97, 123))) + list(map(str, range(10))) + [' ']
     freq_table = {c:f for c, f in zip(chars, freq)}
@@ -34,7 +34,9 @@ def get_map(codec, mode, length, group):
             vocab = f.read().replace('\t', '').split('\n')
 
         # rank by bits needed to encode each combination
-        chars = list(codec.get_code_table().keys())[1:]
+        chars = [c for c in list(codec.get_code_table().keys()) if type(c) is str] # exclude _EOF
+        if group == 3:
+            chars = [c for c in chars if not c.isdigit()] # exclude digits
         code_table = codec.get_code_table()
         all_combi = [(combi, sum([code_table[c][0] for c in combi])) for combi in itertools.combinations_with_replacement(chars, length)]
         ranked_combi = [combi for combi, _ in sorted(all_combi, key=lambda x:x[1])]
@@ -82,8 +84,6 @@ def perm_decode(value, n):
 
 class Agent:
     def __init__(self):
-        #self.codec = english_codec_w_digit()
-        #self.codec.print_code_table()
         self.N_MAX = 30
         self.checksum = 2**16 -1 #sum(range(53))
         self.n2 = -1
@@ -129,7 +129,7 @@ class Agent:
                 s = s[:-1] 
                 truncated = True
 
-        print(s)
+        #print(s)
         N = 4
         while math.factorial(N) <= perm:
             N += 1
@@ -189,20 +189,50 @@ class Agent:
         length = 3 # 37^3 = 50653
         partial = False
 
-        self.codec = english_codec_w_digit()
+        if group == 3:
+            self.codec = english_codec_w_digit(letter_p=0.9, digit_p=0.09, space_p=0.01)
+        else:
+            self.codec = english_codec_w_digit()
 
         # map word in vocab to 3-char permutations
         encode_map = get_map(self.codec, mode='encode', length=length, group=group)
-        em = encode_map
 
-        words = message.split(' ') if group == 8 else message.lower().split(' ')
-        short_message = ''
-
-        for w in words:
-            if w in encode_map:
-                short_message += encode_map[w]
-            else:
+        if group == 3:
+            s = message[1:]
+            short_message = ''
+            i, j = 0, 1
+            while j <= len(s):
+                if s[j-1:j].isdigit():
+                    if i != j - 1: 
+                        partial = True
+                    short_message += s[j-1:j]
+                    i = j
+                    j += 1
+                # this has higher scores:
+                # if s[i:j].isdigit():
+                #     short_message += s[j-1:j]
+                #     i = j
+                #     j += 1
+                elif s[i:j] in encode_map:
+                    short_message += encode_map[s[i:j]]
+                    i = j
+                    j += 1
+                else:
+                    j += 1
+                #print(i, j, short_message)
+            if i < len(message[1:]):
                 partial = True
+
+        else:
+            words = message.split(' ') if group == 8 else message.lower().split(' ')
+            short_message = ''
+
+            for w in words:
+                if w in encode_map:
+                    short_message += encode_map[w]
+                else:
+                    partial = True
+
         #print(short_message)
         perm, truncated = self.truncate_and_encode(short_message)
         partial |= truncated
@@ -213,12 +243,36 @@ class Agent:
         short_message = self.codec.decode(b)
         #print(short_message)
         decode_map = get_map(self.codec, mode='decode', length=3, group=group)
-        words = []
-        for i in range(len(short_message) // 3):
-            mapped_word = short_message[3*i:3*i+3]
-            if mapped_word in decode_map:
-                words.append(decode_map[mapped_word])
-        return ' '.join(words)
+        if group == 3:
+            s = '@'
+            i, j = 0, 1
+            while j <= len(short_message):
+                if short_message[j-1:j].isdigit():
+                    s += short_message[i:j]
+                    i = j
+                    j += 1
+                # this has higher scores:
+                # if short_message[i:j].isdigit():
+                #     s += short_message[i:j]
+                #     i = j
+                #     j += 1
+                elif j == i + 3:
+                    s += decode_map[short_message[i:j]]
+                    i = j
+                    j += 1
+                else:
+                    j += 1
+                #print(i, j, s)
+
+        else:
+            words = []
+            for i in range(len(short_message) // 3):
+                mapped_word = short_message[3*i:3*i+3]
+                if mapped_word in decode_map:
+                    words.append(decode_map[mapped_word])
+            s = ' '.join(words)
+
+        return s
 
     def encode(self, message):
         # TODO: select encoder with the smallest perm
@@ -261,7 +315,7 @@ class Agent:
             
         #print("encode group: " + str(group))
         #group = 7
-        if group >= 6:
+        if group == 3 or group >= 6:
             perm, partial = self.encode_w_vocab(message, group=group)
         else:
             perm, partial = self.encode_default(message, group=group)
@@ -327,7 +381,7 @@ class Agent:
             # TODO: select decoder
             group = choice
             #group =7 
-            if group >= 6:
+            if group == 3 or group >= 6:
                 msg = self.decode_w_vocab(b[:-2], group=group)
             else:
                 msg = self.decode_default(b[:-2], group=group)
