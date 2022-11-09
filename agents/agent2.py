@@ -20,6 +20,14 @@ def english_codec_w_digit():
     freq_table = {c:f for c, f in zip(chars, freq)}
     return HuffmanCodec.from_frequencies(freq_table) # 37 characters
 
+def get_codec(group):
+    if group == 4:
+        freq_table = {'N':1, 'S':1, 'W':1, 'E':1, ' ':3, ',':2, '.':4,
+                '1':5, '2':5, '3':5, '4':5, '5':5, '6':5, '7':5, '8':5, '9':5, '0':5}
+    else:
+        return english_codec_w_digit()
+    return HuffmanCodec.from_frequencies(freq_table) # 37 characters
+
 def get_map(codec, mode, length, group):
         with open(vocab_paths[group-1], 'r') as f:
             vocab = f.read().replace('\t', '').split('\n')
@@ -79,11 +87,14 @@ class Agent:
         self.checksum = 2**16 -1 #sum(range(53))
         self.n2 = -1
 
-    def clean_text(self, s):
+    def clean_text(self, s,group):
         truncated = False
         recognizable_chars = self.codec.get_code_table().keys()
         new_s = ''
-        s = re.sub('\s\s+', ' ', s.lower())
+        if group != 4:
+            s = re.sub('\s\s+', ' ', s.lower())
+        else:
+            s = re.sub('\s\s+', ' ', s)
         s = s.replace('\t', ' ')
         for c in s:
             if c in recognizable_chars:
@@ -117,7 +128,7 @@ class Agent:
                 s = s[:-1] 
                 truncated = True
 
-        print(s)
+        #print(s)
         N = 4
         while math.factorial(N) <= perm:
             N += 1
@@ -152,16 +163,21 @@ class Agent:
         new_message = message + sb
         return new_message
 
-    def encode_default(self, message):
-        self.codec = english_codec_w_digit()
+    def encode_default(self, message, group):
+        if group != 4:
+            self.codec = english_codec_w_digit() 
+            message, truncated = self.clean_text(message, group)
+        else:
+            self.codec = get_codec(group)
+            message, truncated = self.clean_text(message, group)
         partial = False
-        message, truncated = self.clean_text(message)
         partial |= truncated
         perm, truncated = self.truncate_and_encode(message)
         partial |= truncated
         return perm, partial
 
-    def decode_default(self, b):
+    def decode_default(self, b, group):
+        #based on group get codec
         return self.codec.decode(b)
 
     def encode_w_vocab(self, message, group):
@@ -190,7 +206,7 @@ class Agent:
 
     def decode_w_vocab(self, b, group):
         short_message = self.codec.decode(b)
-        print(short_message)
+        #print(short_message)
         decode_map = get_map(self.codec, mode='decode', length=3, group=group)
         words = []
         for i in range(len(short_message) // 3):
@@ -201,9 +217,51 @@ class Agent:
 
     def encode(self, message):
         # TODO: select encoder with the smallest perm
-        group = 6
-        perm, partial = self.encode_w_vocab(message, group=group)
-        choice = 1
+        group = 1
+        # attempting to encode based on structure
+        #should encode every group but 5 currently
+        #still need to get shortest when applicable
+        split_message = message.split()
+        #print(split_message)
+        if message[0] == "@":
+            group = 3
+        elif len(split_message[0]) == 3:
+            group = 2
+        else:
+            if len(split_message) > 1:
+                if split_message[1] in ["N,","S,","E,","W,"]:
+                    group = 4
+            if group == 1:
+                group = 6
+                with open(vocab_paths[group-1], 'r') as f: #group 6
+                    vocab = f.read().replace('\t', '').split('\n')
+                for word in split_message:
+                    if word not in vocab:
+                        group = 1
+                if group == 1:
+                    group = 7
+                    with open(vocab_paths[group-1], 'r') as f: #group 6
+                        vocab = f.read().replace('\t', '').split('\n')
+                    for word in split_message:
+                        if word not in vocab:
+                            group = 1
+                if group == 1:
+                    group = 8
+                    with open(vocab_paths[group-1], 'r') as f: #group 6
+                        vocab = f.read().replace('\t', '').split('\n')
+                    for word in split_message:
+                        if word not in vocab:
+                            group = 1
+                
+            
+        print("encode group: " + str(group))
+        #group = 7
+        if group >= 6:
+            perm, partial = self.encode_w_vocab(message, group=group)
+        else:
+            perm, partial = self.encode_default(message, group=group)
+        
+        choice = group
 
         # use 1 bit to encode partial
         perm = self.add_partial_flag(perm, partial)
@@ -249,13 +307,19 @@ class Agent:
 
         # b'\xc4N\xb1\xc7\x19\xc4\xc7RK4\x92\xcd8\xf9i'
         # [14, 21, 25, 0, 15, 5, 32, 22, 29, 26, 16, 6, 19, 30, 31, 9, 23, 20, 27, 8, 12, 3, 18, 7, 24, 10, 28, 17, 1, 4, 13, 2, 11]
+        
+        print("DECODE group: " + str(choice))
         if n_decode > N_MAX:
             #print(n_decode)
             msg = "NULL"
         else:
             # TODO: select decoder
-            group = 6
-            msg = self.decode_w_vocab(b[:-2], group=group)
+            group = choice
+            #group =7 
+            if group >= 6:
+                msg = self.decode_w_vocab(b[:-2], group=group)
+            else:
+                msg = self.decode_default(b[:-2], group=group)
             if partial:
                 msg  = 'PARTIAL: ' + msg
         return msg
