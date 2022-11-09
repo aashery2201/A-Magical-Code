@@ -7,6 +7,10 @@ import numpy as np
 import re, pickle
 import copy, itertools
 import hashlib, base64
+from random import *
+import datetime
+import secrets
+import string
 
 vocab_paths = ['', '', 'messages/agent2/g3_vocab.txt', '', '', 'messages/agent2/g6_vocab.txt', 'messages/agent2/g7_vocab.txt', 'messages/agent2/g8_vocab.txt']
 
@@ -87,6 +91,28 @@ class Agent:
         self.N_MAX = 30
         self.checksum = 2**16 -1 #sum(range(53))
         self.n2 = -1
+
+    def generator(self, numMessages, seedNum):
+        seed(seedNum)
+        messages = []
+        for m in range(numMessages):
+            file = open('messages/agent2/airportcodes.txt', 'r')
+            content = file.readlines()
+            month = randint(1,12)
+            day = randint(1,28)
+            airport = randint(1,2019)
+            airportCode = content[airport]
+            airportCode = airportCode[:-1]
+            if month < 10:
+                month = '0' + str(month)
+            if day < 10:
+                day = '0' + str(day)
+            N = 4
+            res = ''.join(choice(string.ascii_uppercase + string.digits)
+                        for i in range(N))
+            message = airportCode + ' ' + res + ' ' + str(month) + str(day) + '2023' 
+            messages.append(message)
+        return messages
 
     def clean_text(self, s,group):
         truncated = False
@@ -275,6 +301,7 @@ class Agent:
         return s
 
     def encode(self, message):
+        print(self.generator(10,2))
         # TODO: select encoder with the smallest perm
         group = 1
         # attempting to encode based on structure
