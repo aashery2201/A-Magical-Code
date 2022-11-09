@@ -43,7 +43,7 @@ def get_map(codec, mode, length, group):
         str_map = {}
         i = 0
         for combi in ranked_combi:
-            target_strs = set([''.join(p) for p in itertools.permutations(combi)])
+            target_strs = sorted(list(set([''.join(p) for p in itertools.permutations(combi)])))
             for target in target_strs:
                 if mode == 'encode':
                     str_map[vocab[i]] = target
@@ -129,7 +129,7 @@ class Agent:
                 s = s[:-1] 
                 truncated = True
 
-        #print(s)
+        print(s)
         N = 4
         while math.factorial(N) <= perm:
             N += 1
