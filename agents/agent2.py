@@ -6,6 +6,7 @@ import math
 import numpy as np
 import re, pickle
 import copy, itertools
+import hashlib, base64
 
 vocab_paths = ['', '', '', '', '', 'messages/agent2/g6_vocab.txt', 'messages/agent2/g7_vocab.txt', 'messages/agent2/g8_vocab.txt']
 
@@ -136,7 +137,7 @@ class Agent:
 
         perm, _ = self.remove_encoder_choice(perm)
         perm, _ = self.remove_partial_flag(perm)
-
+        
         return perm, truncated
 
     def add_partial_flag(self, perm, partial=False):
@@ -158,7 +159,11 @@ class Agent:
         return perm >> 3, choice
 
     def add_checksum(self,message):
-        checksum = self.checksum - sum(message)
+        #print(message)
+       # m = bytes(message,'utf-8')
+        d=hashlib.md5(message).digest(); d=base64.b64encode(d);  
+        checksum = self.checksum - sum(d)
+        #print(checksum)
         sb = checksum.to_bytes(2,"big")
         new_message = message + sb
         return new_message
@@ -198,7 +203,7 @@ class Agent:
                 short_message += encode_map[w]
             else:
                 partial = True
-
+        #print(short_message)
         perm, truncated = self.truncate_and_encode(short_message)
         partial |= truncated
 
@@ -254,7 +259,7 @@ class Agent:
                             group = 1
                 
             
-        print("encode group: " + str(group))
+        #print("encode group: " + str(group))
         #group = 7
         if group >= 6:
             perm, partial = self.encode_w_vocab(message, group=group)
@@ -268,10 +273,11 @@ class Agent:
 
         # use 3 bits to encode encoder choice
         perm = self.add_encoder_choice(perm, choice)
-
+        #print(perm)
         ordered_deck = perm_decode(perm, self.N)
         #print(self.N, ordered_deck)
         self.start = 52 - self.N 
+        #print(self.N)
         deck = list(range(self.start)) + [card+self.start for card in ordered_deck]
         return deck
 
@@ -297,18 +303,23 @@ class Agent:
                 byte_length = (max(perm.bit_length(), 1) + 7) // 8
                 b = (perm).to_bytes(byte_length, byteorder='big')
                 cs = int.from_bytes(b[-2:], byteorder='big')
-                if sum(b[:-2]) + cs == self.checksum:
+                d=hashlib.md5(b[:-2]).digest(); d=base64.b64encode(d);  
+                if sum(d) == self.checksum - cs:
                     passed_check = True
-                    #print("ACCEPT")
+                # if sum(b[:-2]) + cs == self.checksum:
+                #     print(sum(b[:-2]) + cs)
+                #     passed_check = True
+                #     #print("ACCEPT")
                 else:
                     perm = -1
-            
+             
             #print(perm,n_decode,not(passed_check))
 
         # b'\xc4N\xb1\xc7\x19\xc4\xc7RK4\x92\xcd8\xf9i'
         # [14, 21, 25, 0, 15, 5, 32, 22, 29, 26, 16, 6, 19, 30, 31, 9, 23, 20, 27, 8, 12, 3, 18, 7, 24, 10, 28, 17, 1, 4, 13, 2, 11]
         
-        print("DECODE group: " + str(choice))
+        #print("DECODE group: " + str(choice))
+        #print(n_decode)
         if n_decode > N_MAX:
             #print(n_decode)
             msg = "NULL"
@@ -322,4 +333,5 @@ class Agent:
                 msg = self.decode_default(b[:-2], group=group)
             if partial:
                 msg  = 'PARTIAL: ' + msg
+        #print(msg)
         return msg
