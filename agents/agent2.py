@@ -312,7 +312,7 @@ class Agent:
 
         return perm, partial
 
-    def decode_w_vocab(self, b, group):
+    def decode_w_vocab(self, b, group, partial=False):
         length = 4 if group == 3 else 3
         short_message = self.codec.decode(b)
         #print(short_message)
@@ -350,7 +350,7 @@ class Agent:
                 words.append(decode_map[mapped_word])
         s += ' '.join(words)
 
-        if group == 5:
+        if group == 5 and not partial:
             s += ' '
 
         return s
@@ -474,7 +474,7 @@ class Agent:
             group = choice
             #group = 8
             if group == 3 or group >= 5:
-                msg = self.decode_w_vocab(b[:-2], group=group)
+                msg = self.decode_w_vocab(b[:-2], group=group, partial=partial)
             else:
                 msg = self.decode_default(b[:-2], group=group)
             if partial:
