@@ -14,37 +14,35 @@ import string
 
 ############# GENERATOR ###############
 def generate(numMessages, seedNum, w=False):
+    if w:
+        f = open('airportExMessages.txt', 'w')
+    seed(seedNum)
+    messages = []
+    for m in range(numMessages):
+        file = open('messages/agent2/airportcodes.txt', 'r')
+        content = file.readlines()
+        month = randint(1,12)
+        day = randint(1,28)
+        year = randint(2023,2025)
+        airport = randint(0,2018)
+        airportCode = content[airport]
+        airportCode = airportCode[:-1]
+        if month < 10:
+            month = '0' + str(month)
+        if day < 10:
+            day = '0' + str(day)
+        N = 4
+        res = ''.join(choice(string.ascii_uppercase + string.digits)
+                    for i in range(N))
+        message = airportCode + ' ' + res + ' ' + str(month) + str(day) + str(year) 
         if w:
-            f = open('airportExMessages.txt', 'w')
-        seed(seedNum)
-        messages = []
-        for m in range(numMessages):
-            file = open('messages/agent2/airportcodes.txt', 'r')
-            content = file.readlines()
-            month = randint(1,12)
-            day = randint(1,28)
-            year = randint(2023,2025)
-            airport = randint(0,2018)
-            airportCode = content[airport]
-            airportCode = airportCode[:-1]
-            if month < 10:
-                month = '0' + str(month)
-            if day < 10:
-                day = '0' + str(day)
-            N = 4
-            res = ''.join(choice(string.ascii_uppercase + string.digits)
-                        for i in range(N))
-            message = airportCode + ' ' + res + ' ' + str(month) + str(day) + str(year) 
-            if w:
-                f.write(message+'\n')
-            messages.append(message)
-        if w:
-            f.close()
-        return messages
+            f.write(message+'\n')
+        messages.append(message)
+    if w:
+        f.close()
+    return messages
 
-
-
-vocab_paths = ['', 'messages/agent2/g2_vocab.txt', 'messages/agent2/g3_vocab.txt', '', '', 'messages/agent2/g6_vocab.txt', 'messages/agent2/g7_vocab.txt', 'messages/agent2/g8_vocab.txt']
+vocab_paths = ['', 'messages/agent2/g2_vocab.txt', 'messages/agent2/g3_vocab.txt', '', 'messages/agent2/g5_vocab.txt', 'messages/agent2/g6_vocab.txt', 'messages/agent2/g7_vocab.txt', 'messages/agent2/g8_vocab.txt']
 
 def english_codec_w_digit(letter_p=0.92, digit_p=0.03, space_p=0.05):
     # https://en.wikipedia.org/wiki/Letter_frequency
@@ -76,32 +74,32 @@ def get_codec(group):
     return HuffmanCodec.from_frequencies(freq_table) # 37 characters
 
 def get_map(codec, mode, length, group):
-        with open(vocab_paths[group-1], 'r') as f:
-            vocab = f.read().replace('\t', '').replace(' ', '').split('\n')
+    with open(vocab_paths[group-1], 'r') as f:
+        vocab = f.read().replace('\t', '').split('\n')
 
-        # rank by bits needed to encode each combination
-        chars = [c for c in list(codec.get_code_table().keys()) if type(c) is str] # exclude _EOF
-        if group == 3:
-            chars = [c for c in chars if not c.isdigit()] # exclude digits
-        code_table = codec.get_code_table()
-        all_combi = [(combi, sum([code_table[c][0] for c in combi])) for combi in itertools.combinations_with_replacement(chars, length)]
-        ranked_combi = [combi for combi, _ in sorted(all_combi, key=lambda x:x[1])]
+    # rank by bits needed to encode each combination
+    chars = [c for c in list(codec.get_code_table().keys()) if type(c) is str] # exclude _EOF
+    if group == 3 or group == 5:
+        chars = [c for c in chars if not c.isdigit()] # exclude digits
+    code_table = codec.get_code_table()
+    all_combi = [(combi, sum([code_table[c][0] for c in combi])) for combi in itertools.combinations_with_replacement(chars, length)]
+    ranked_combi = [combi for combi, _ in sorted(all_combi, key=lambda x:x[1])]
 
-        # map word in vocab to 3-char permutations
-        str_map = {}
-        i = 0
-        for combi in ranked_combi:
-            target_strs = sorted(list(set([''.join(p) for p in itertools.permutations(combi)])))
-            for target in target_strs:
-                if mode == 'encode':
-                    str_map[vocab[i]] = target
-                else:
-                    str_map[target] = vocab[i]
-                i += 1
-                if i >= len(vocab): break
+    # map word in vocab to 3-char permutations
+    str_map = {}
+    i = 0
+    for combi in ranked_combi:
+        target_strs = sorted(list(set([''.join(p) for p in itertools.permutations(combi)])))
+        for target in target_strs:
+            if mode == 'encode':
+                str_map[vocab[i]] = target
+            else:
+                str_map[target] = vocab[i]
+            i += 1
             if i >= len(vocab): break
+        if i >= len(vocab): break
 
-        return str_map
+    return str_map
 
 # splits g3's password into list of words and digits in order
 def split_password(encode_map, digits_and_words, curr, remaining_pw):
@@ -287,6 +285,18 @@ class Agent:
                 else:
                     partial = True
 
+        elif group == 5:
+            if message[-1] == ' ':
+                message = message[:-1]
+            else:
+                partial = True
+            words = message.split(' ')
+            short_message = words[0]
+            for w in [' '.join(words[1:-1]), words[-1]]:
+                if w in encode_map:
+                    short_message += encode_map[w]
+                else:
+                    partial = True
         else:
             words = message.split(' ')
             short_message = ''
@@ -315,20 +325,33 @@ class Agent:
                     s += short_message[i:j]
                     i = j
                     j += 1
-                elif j == i + 4:
+                elif j == i + length:
                     s += decode_map[short_message[i:j]]
                     i = j
                     j += 1
                 else:
                     j += 1
+            return s
 
-        else:
-            words = []
-            for i in range(len(short_message) // 3):
-                mapped_word = short_message[3*i:3*i+3]
-                if mapped_word in decode_map:
-                    words.append(decode_map[mapped_word])
-            s = ' '.join(words)
+        s = ''
+        if group == 5:
+            i = 0
+            while short_message[i].isdigit():
+                s += short_message[i]
+                i += 1
+            short_message = short_message[i:]
+            s += ' '
+        #print(s, short_message)
+
+        words = []
+        for i in range(len(short_message) // length):
+            mapped_word = short_message[length*i:length*i+length]
+            if mapped_word in decode_map:
+                words.append(decode_map[mapped_word])
+        s += ' '.join(words)
+
+        if group == 5:
+            s += ' '
 
         return s
 
@@ -342,15 +365,22 @@ class Agent:
         #print(split_message)
         if message[0] == "@":
             group = 3
-        elif len(split_message[0]) == 3 and split_message[0] == split_message[0].upper():
+        elif not split_message[0].isdigit() and len(split_message[0]) == 3 and split_message[0] == split_message[0].upper():
             group = 2
         else:
             if len(split_message) > 1:
                 if split_message[1] in ["N,","S,","E,","W,"]:
                     group = 4
+                else:
+                    group = 5
+                    with open(vocab_paths[group-1], 'r') as f: 
+                        vocab = f.read().replace('\t', '').split('\n')
+                    if not (split_message[0].isdigit() and split_message[-1] in vocab):
+                        group = 1
+
             if group == 1:
                 group = 6
-                with open(vocab_paths[group-1], 'r') as f: #group 6
+                with open(vocab_paths[group-1], 'r') as f: 
                     vocab = f.read().replace('\t', '').split('\n')
                 for word in split_message:
                     if word not in vocab:
@@ -372,7 +402,7 @@ class Agent:
                 
             
         #print("encode group: " + str(group))
-        if group == 3 or group >= 6:
+        if group == 3 or group >= 5:
             perm, partial = self.encode_w_vocab(message, group=group)
         else:
             perm, partial = self.encode_default(message, group=group)
@@ -443,7 +473,7 @@ class Agent:
             # TODO: select decoder
             group = choice
             #group = 8
-            if group == 3 or group >= 6:
+            if group == 3 or group >= 5:
                 msg = self.decode_w_vocab(b[:-2], group=group)
             else:
                 msg = self.decode_default(b[:-2], group=group)
