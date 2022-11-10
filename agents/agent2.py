@@ -74,6 +74,7 @@ def get_codec(group):
     return HuffmanCodec.from_frequencies(freq_table) # 37 characters
 
 def get_map(codec, mode, length, group):
+    print(group)
     with open(vocab_paths[group-1], 'r') as f:
         vocab = f.read().replace('\t', '').split('\n')
 
@@ -242,9 +243,9 @@ class Agent:
        # m = bytes(message,'utf-8')
         d=hashlib.md5(message).digest(); d=base64.b64encode(d); 
         checksum = self.checksum - (sum(d))# // 10)
-        print("CHECK")
-        print(checksum)
-        print(bin(checksum))
+       # print("CHECK")
+        #print(checksum)
+        #print(bin(checksum))
         checksum = (bin(checksum))
         g = bin(group-1)[2:]
         if len(g) == 1:
@@ -252,7 +253,7 @@ class Agent:
         elif len(g) == 2:
             g = '0' + g
         checksum += g
-        print(checksum)
+       # print(checksum)
         checksum = int(checksum,2)
         sb = checksum.to_bytes(2,"big")
         #print(sb)
@@ -413,7 +414,7 @@ class Agent:
                             group = 1
                 
             
-        #print("encode group: " + str(group))
+        print("encode group: " + str(group))
         if group == 3 or group >= 5:
             perm, partial = self.encode_w_vocab(message, group=group)
         else:
@@ -467,7 +468,9 @@ class Agent:
                 #print(bin(cs))
                 if len(bin(cs)) > 4:
                     g = bin(cs)[-3:]
-                    g = int(g) + 1
+                    #print(g)
+                    g = int(g,2) + 1
+                    print(g)
                 cs = cs >> 3
                 
                 # print(bits)
@@ -502,6 +505,7 @@ class Agent:
             # TODO: select decoder
             group = g#choice
             #group = 8
+            print("DECODE group: " + str(g))
             if group == 3 or group >= 5:
                 msg = self.decode_w_vocab(b[:-2], group=group, partial=partial)
             else:
