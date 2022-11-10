@@ -146,7 +146,7 @@ def perm_decode(value, n):
 class Agent:
     def __init__(self):
         self.N_MAX = 30
-        self.checksum = 2**16 -1 #sum(range(53))
+        self.checksum = 2**12 -1 #sum(range(53))
         self.n2 = -1
 
     def clean_text(self, s,group):
@@ -183,13 +183,13 @@ class Agent:
         while perm > max_perm:
             if group == 2:
                 encoded = self.codec.encode(s[:-4])
-                encoded = self.add_checksum(encoded)
+                encoded = self.add_checksum(encoded,group)
                 perm = int.from_bytes(encoded, byteorder='big')
                 #print(encoded)
                 perm = self.add_year(perm, s[-4:])
             else:
                 encoded = self.codec.encode(s)
-                encoded = self.add_checksum(encoded)
+                encoded = self.add_checksum(encoded,group)
                 perm = int.from_bytes(encoded, byteorder='big')
             perm = self.add_partial_flag(perm)
             perm = self.add_encoder_choice(perm) # IMPORTANT: add placeholder bits for length calculation
@@ -237,13 +237,25 @@ class Agent:
         choice = perm - (perm >> 3 << 3)
         return perm >> 3, choice
 
-    def add_checksum(self,message):
+    def add_checksum(self,message, group):
         #print(message)
        # m = bytes(message,'utf-8')
-        d=hashlib.md5(message).digest(); d=base64.b64encode(d);  
-        checksum = self.checksum - sum(d)
-        #print(checksum)
+        d=hashlib.md5(message).digest(); d=base64.b64encode(d); 
+        checksum = self.checksum - (sum(d))# // 10)
+        print("CHECK")
+        print(checksum)
+        print(bin(checksum))
+        checksum = (bin(checksum))
+        g = bin(group-1)[2:]
+        if len(g) == 1:
+            g ='00' + g
+        elif len(g) == 2:
+            g = '0' + g
+        checksum += g
+        print(checksum)
+        checksum = int(checksum,2)
         sb = checksum.to_bytes(2,"big")
+        #print(sb)
         new_message = message + sb
         return new_message
 
@@ -448,14 +460,31 @@ class Agent:
                     perm, year = self.remove_year(perm)
                 byte_length = (max(perm.bit_length(), 1) + 7) // 8
                 b = (perm).to_bytes(byte_length, byteorder='big')
-                cs = int.from_bytes(b[-2:], byteorder='big')
+                #bits = list(b)
+                cs = int.from_bytes(b[-2:], byteorder='big')# >> 3
+                #print(bin(cs))
+                #print(cs)
+                #print(bin(cs))
+                if len(bin(cs)) > 4:
+                    g = bin(cs)[-3:]
+                    g = int(g) + 1
+                cs = cs >> 3
+                
+                # print(bits)
+                # if len(bits) == 2:
+                # #print(b)
+                # #print(bits)
+                #     g = bin(bits[1])[-3:]
+                #     #print(bin(cs))
+                #     cs = cs >> 3
+                #print(bin(cs))
                 d=hashlib.md5(b[:-2]).digest(); d=base64.b64encode(d);  
-                if sum(d) == self.checksum - cs:
+                if cs == self.checksum - (sum(d)):# * 10):
                     passed_check = True
                 # if sum(b[:-2]) + cs == self.checksum:
                 #     print(sum(b[:-2]) + cs)
                 #     passed_check = True
-                #     #print("ACCEPT")
+                    print("ACCEPT")
                 else:
                     perm = -1
              
@@ -471,7 +500,7 @@ class Agent:
             msg = "NULL"
         else:
             # TODO: select decoder
-            group = choice
+            group = g#choice
             #group = 8
             if group == 3 or group >= 5:
                 msg = self.decode_w_vocab(b[:-2], group=group, partial=partial)
