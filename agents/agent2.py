@@ -103,6 +103,23 @@ def get_map(codec, mode, length, group):
 
         return str_map
 
+# splits g3's password into list of words and digits in order
+def split_password(encode_map, digits_and_words, curr, remaining_pw):
+    if remaining_pw == '':
+        if curr == '':
+            return digits_and_words
+        elif curr.isdigit() or curr in encode_map:
+            return digits_and_words + [curr]
+        else:
+            return None
+
+    if curr.isdigit() or curr in encode_map:
+        extracted = split_password(encode_map, digits_and_words+[curr], '', remaining_pw)
+        if not extracted is None:
+            return extracted
+    
+    return split_password(encode_map, digits_and_words, curr+remaining_pw[0], remaining_pw[1:])
+
 def perm_encode(A):
     if len(A) == 0:
         return -1
@@ -245,8 +262,9 @@ class Agent:
         #based on group get codec
         return self.codec.decode(b)
 
+
     def encode_w_vocab(self, message, group):
-        length = 3 # 37^3 = 50653
+        length = 4 if group == 3 else 3 # 37^3 = 50653, 27^3 = 19683
         partial = False
 
         if group == 3:
@@ -258,35 +276,20 @@ class Agent:
         encode_map = get_map(self.codec, mode='encode', length=length, group=group)
 
         if group == 3:
-            s = message[1:]
+            words = split_password(encode_map, [], '', message[1:])
+            #print(words)
             short_message = ''
-            i, j = 0, 1
-            while j <= len(s):
-                if s[j-1:j].isdigit():
-                    if i != j - 1: 
-                        partial = True
-                    short_message += s[j-1:j]
-                    i = j
-                    j += 1
-                # this has higher scores:
-                # if s[i:j].isdigit():
-                #     short_message += s[j-1:j]
-                #     i = j
-                #     j += 1
-                elif s[i:j] in encode_map:
-                    short_message += encode_map[s[i:j]]
-                    i = j
-                    j += 1
+            for w in words:
+                if w.isdigit():
+                    short_message += w
+                elif w in encode_map:
+                    short_message += encode_map[w]
                 else:
-                    j += 1
-                #print(i, j, short_message)
-            if i < len(message[1:]):
-                partial = True
+                    partial = True
 
         else:
             words = message.split(' ') if group == 8 else message.lower().split(' ')
             short_message = ''
-
             for w in words:
                 if w in encode_map:
                     short_message += encode_map[w]
@@ -300,29 +303,24 @@ class Agent:
         return perm, partial
 
     def decode_w_vocab(self, b, group):
+        length = 4 if group == 3 else 3
         short_message = self.codec.decode(b)
         #print(short_message)
-        decode_map = get_map(self.codec, mode='decode', length=3, group=group)
+        decode_map = get_map(self.codec, 'decode', length, group)
         if group == 3:
             s = '@'
             i, j = 0, 1
             while j <= len(short_message):
-                if short_message[j-1:j].isdigit():
+                if short_message[i:j].isdigit():
                     s += short_message[i:j]
                     i = j
                     j += 1
-                # this has higher scores:
-                # if short_message[i:j].isdigit():
-                #     s += short_message[i:j]
-                #     i = j
-                #     j += 1
-                elif j == i + 3:
+                elif j == i + 4:
                     s += decode_map[short_message[i:j]]
                     i = j
                     j += 1
                 else:
                     j += 1
-                #print(i, j, s)
 
         else:
             words = []
