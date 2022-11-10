@@ -77,7 +77,7 @@ def get_codec(group):
 
 def get_map(codec, mode, length, group):
         with open(vocab_paths[group-1], 'r') as f:
-            vocab = f.read().replace('\t', '').split('\n')
+            vocab = f.read().replace('\t', '').replace(' ', '').split('\n')
 
         # rank by bits needed to encode each combination
         chars = [c for c in list(codec.get_code_table().keys()) if type(c) is str] # exclude _EOF
@@ -288,7 +288,7 @@ class Agent:
                     partial = True
 
         else:
-            words = message.split(' ') if group == 8 else message.lower().split(' ')
+            words = message.split(' ')
             short_message = ''
             for w in words:
                 if w in encode_map:
