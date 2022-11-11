@@ -193,7 +193,7 @@ class Agent:
                 encoded = self.add_checksum(encoded,group)
                 perm = int.from_bytes(encoded, byteorder='big')
             perm = self.add_partial_flag(perm)
-            perm = self.add_encoder_choice(perm) # IMPORTANT: add placeholder bits for length calculation
+            #perm = self.add_encoder_choice(perm) # IMPORTANT: add placeholder bits for length calculation
             if perm > max_perm:
                 s = s[:-1] 
                 truncated = True
@@ -204,7 +204,7 @@ class Agent:
             N += 1
         self.N = N
 
-        perm, _ = self.remove_encoder_choice(perm)
+        #perm, _ = self.remove_encoder_choice(perm)
         perm, _ = self.remove_partial_flag(perm)
         
         return perm, truncated
@@ -242,10 +242,7 @@ class Agent:
         #print(message)
        # m = bytes(message,'utf-8')
         d=hashlib.md5(message).digest(); d=base64.b64encode(d); 
-        checksum = self.checksum - (sum(d))# // 10)
-       # print("CHECK")
-        #print(checksum)
-        #print(bin(checksum))
+        checksum = self.checksum - (sum(d))
         checksum = (bin(checksum))
         g = bin(group-1)[2:]
         if len(g) == 1:
@@ -327,8 +324,8 @@ class Agent:
 
     def decode_w_vocab(self, b, group, partial=False):
         length = 4 if group == 3 else 3
+        print(b)
         short_message = self.codec.decode(b)
-        #print(short_message)
         decode_map = get_map(self.codec, 'decode', length, group)
         if group == 3:
             s = '@'
@@ -339,9 +336,13 @@ class Agent:
                     i = j
                     j += 1
                 elif j == i + length:
-                    s += decode_map[short_message[i:j]]
-                    i = j
-                    j += 1
+                    if short_message[i:j] in decode_map:
+                        s += decode_map[short_message[i:j]]
+                        i = j
+                        j += 1
+                    else:
+                        partial = True
+                        break
                 else:
                     j += 1
             return s
@@ -361,6 +362,9 @@ class Agent:
             mapped_word = short_message[length*i:length*i+length]
             if mapped_word in decode_map:
                 words.append(decode_map[mapped_word])
+            else:
+                partial = True
+                break
         s += ' '.join(words)
 
         if group == 5 and not partial:
@@ -426,7 +430,7 @@ class Agent:
         perm = self.add_partial_flag(perm, partial)
 
         # use 3 bits to encode encoder choice
-        perm = self.add_encoder_choice(perm, choice-1)
+        #perm = self.add_encoder_choice(perm, choice-1)
         #print(perm)
         ordered_deck = perm_decode(perm, self.N)
         #print(self.N, ordered_deck)
@@ -454,8 +458,8 @@ class Agent:
             #print("perm: " + str(perm))
 
             if perm > 0:
-                perm, choice = self.remove_encoder_choice(perm)
-                choice += 1
+                #perm, choice = self.remove_encoder_choice(perm)
+                #choice += 1
                 perm, partial = self.remove_partial_flag(perm)
                 #print(perm)
                 #if choice == 2:
@@ -505,7 +509,7 @@ class Agent:
             else:
                 group = g#choice
             #group = 8
-           # print("DECODE group: " + str(g))
+            print("DECODE group: " + str(group))
             if group == 3 or group >= 5:
                 msg = self.decode_w_vocab(b[:-2], group=group, partial=partial)
             elif group == 2:
