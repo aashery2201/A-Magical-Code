@@ -12,6 +12,36 @@ import datetime
 import secrets
 import string
 
+############# GENERATOR ###############
+def generate(numMessages, seedNum, w=False):
+    if w:
+        f = open('airportExMessages.txt', 'w')
+    seed(seedNum)
+    messages = []
+    for m in range(numMessages):
+        file = open('messages/agent2/airportcodes.txt', 'r')
+        content = file.readlines()
+        month = randint(1,12)
+        day = randint(1,28)
+        year = randint(2023,2025)
+        airport = randint(0,2018)
+        airportCode = content[airport]
+        airportCode = airportCode[:-1]
+        if month < 10:
+            month = '0' + str(month)
+        if day < 10:
+            day = '0' + str(day)
+        N = 4
+        res = ''.join(choice(string.ascii_uppercase + string.digits)
+                    for i in range(N))
+        message = airportCode + ' ' + res + ' ' + str(month) + str(day) + str(year) 
+        if w:
+            f.write(message+'\n')
+        messages.append(message)
+    if w:
+        f.close()
+    return messages
+
 vocab_paths = ['', 'messages/agent2/g2_vocab.txt', 'messages/agent2/g3_vocab.txt', '', 'messages/agent2/g5_vocab.txt', 'messages/agent2/g6_vocab.txt', 'messages/agent2/g7_vocab.txt', 'messages/agent2/g8_vocab.txt']
 
 def english_codec_w_digit(letter_p=0.92, digit_p=0.03, space_p=0.05):
@@ -209,9 +239,13 @@ class Agent:
         return perm >> 3, choice
 
     def add_checksum(self,message, group):
+        #print(message)
+       # m = bytes(message,'utf-8')
         d=hashlib.md5(message).digest(); d=base64.b64encode(d); 
         checksum = self.checksum - (sum(d))# // 10)
-        
+       # print("CHECK")
+        #print(checksum)
+        #print(bin(checksum))
         checksum = (bin(checksum))
         g = bin(group-1)[2:]
         if len(g) == 1:
@@ -219,10 +253,10 @@ class Agent:
         elif len(g) == 2:
             g = '0' + g
         checksum += g
-
+       # print(checksum)
         checksum = int(checksum,2)
         sb = checksum.to_bytes(2,"big")
-        
+        #print(sb)
         new_message = message + sb
         return new_message
 
@@ -305,13 +339,9 @@ class Agent:
                     i = j
                     j += 1
                 elif j == i + length:
-                    if short_message[i:j] in decode_map:
-                        s += decode_map[short_message[i:j]]
-                        i = j
-                        j += 1
-                    else:
-                        partial = True
-                        break
+                    s += decode_map[short_message[i:j]]
+                    i = j
+                    j += 1
                 else:
                     j += 1
             return s
@@ -331,9 +361,6 @@ class Agent:
             mapped_word = short_message[length*i:length*i+length]
             if mapped_word in decode_map:
                 words.append(decode_map[mapped_word])
-            else:
-                partial = True
-                break
         s += ' '.join(words)
 
         if group == 5 and not partial:
@@ -342,8 +369,13 @@ class Agent:
         return s
 
     def encode(self, message):
+        # TODO: select encoder with the smallest perm
         group = 1
+        # attempting to encode based on structure
+        #should encode every group but 5 currently
+        #still need to get shortest when applicable
         split_message = message.split()
+        #print(split_message)
         if message[0] == "@":
             group = 3
         elif not split_message[0].isdigit() and len(split_message[0]) == 3 and split_message[0] == split_message[0].upper():
@@ -382,10 +414,12 @@ class Agent:
                             group = 1
                 
             
+       # print("encode group: " + str(group))
         if group == 3 or group >= 5:
             perm, partial = self.encode_w_vocab(message, group=group)
         else:
             perm, partial = self.encode_default(message, group=group)
+        #print(perm)
         choice = group
 
         # use 1 bit to encode partial
@@ -393,9 +427,13 @@ class Agent:
 
         # use 3 bits to encode encoder choice
         perm = self.add_encoder_choice(perm, choice-1)
+        #print(perm)
         ordered_deck = perm_decode(perm, self.N)
+        #print(self.N, ordered_deck)
         self.start = 52 - self.N 
+        #print(self.N)
         deck = list(range(self.start)) + [card+self.start for card in ordered_deck]
+        #print(choice)
         return deck
 
     def decode(self, deck):
@@ -403,40 +441,75 @@ class Agent:
         n_decode = 2
         perm = -1
         passed_check = False
+        passed_check2 = False
         
         while perm <= 0 and n_decode <= N_MAX and not(passed_check):
 
             n_decode += 1 # do not put this after retrieve_coded_cards... N_MAX would be wrong
             ordered_deck = self.retrieve_coded_cards(deck, n_decode)
+            #print(n_decode, ordered_deck)
+            #if n_decode == N_MAX: print(ordered_deck)
 
             perm = perm_encode(ordered_deck)
+            #print("perm: " + str(perm))
+
             if perm > 0:
                 perm, choice = self.remove_encoder_choice(perm)
                 choice += 1
                 perm, partial = self.remove_partial_flag(perm)
-                if choice == 2:
-                    perm, year = self.remove_year(perm)
-                byte_length = (max(perm.bit_length(), 1) + 7) // 8
-                b = (perm).to_bytes(byte_length, byteorder='big')
-                cs = int.from_bytes(b[-2:], byteorder='big')# >> 3
-                
-                if len(bin(cs)) > 4:
-                    g = bin(cs)[-3:]
-                    g = int(g,2) + 1
-                cs = cs >> 3
-                
-                d=hashlib.md5(b[:-2]).digest(); d=base64.b64encode(d);  
-                if cs == self.checksum - (sum(d)):# * 10):
+                #print(perm)
+                #if choice == 2:
+                  
+                perm_group2, year = self.remove_year(perm)
+                byte_length2 = (max(perm_group2.bit_length(), 1) + 7) // 8
+                b2 = (perm_group2).to_bytes(byte_length2, byteorder='big')
+                cs2 = int.from_bytes(b2[-2:], byteorder='big')
+                if len(bin(cs2)) > 4:
+                    g2 = bin(cs2)[-3:]
+                    g2 = int(g2,2) + 1
+                cs2 = cs2 >> 3
+                d2=hashlib.md5(b2[:-2]).digest(); d2=base64.b64encode(d2);  
+                if cs2 == self.checksum - (sum(d2)):# * 10):
+                    passed_check2 = True
                     passed_check = True
-                else:
-                    perm = -1
+
+                if not passed_check2:
+                    byte_length = (max(perm.bit_length(), 1) + 7) // 8
+                    b = (perm).to_bytes(byte_length, byteorder='big')
+                    cs = int.from_bytes(b[-2:], byteorder='big')
+                    if len(bin(cs)) > 4:
+                        g = bin(cs)[-3:]
+                        g = int(g,2) + 1
+                    cs = cs >> 3
+                    
+                    d=hashlib.md5(b[:-2]).digest(); d=base64.b64encode(d);  
+                    if cs == self.checksum - (sum(d)):# * 10):
+                        passed_check = True
+                    else:
+                        perm = -1
              
+            #print(perm,n_decode,not(passed_check))
+
+        # b'\xc4N\xb1\xc7\x19\xc4\xc7RK4\x92\xcd8\xf9i'
+        # [14, 21, 25, 0, 15, 5, 32, 22, 29, 26, 16, 6, 19, 30, 31, 9, 23, 20, 27, 8, 12, 3, 18, 7, 24, 10, 28, 17, 1, 4, 13, 2, 11]
+        
+        #print("DECODE group: " + str(choice))
+        #print(n_decode)
         if n_decode > N_MAX:
+            #print(n_decode)
             msg = "NULL"
         else:
-            group = g
+            # TODO: select decoder
+            if passed_check2:
+                group = g2
+            else:
+                group = g#choice
+            #group = 8
+           # print("DECODE group: " + str(g))
             if group == 3 or group >= 5:
                 msg = self.decode_w_vocab(b[:-2], group=group, partial=partial)
+            elif group == 2:
+                msg = self.decode_default(b2[:-2], group=group)
             else:
                 msg = self.decode_default(b[:-2], group=group)
             if partial:
@@ -444,6 +517,7 @@ class Agent:
             else:
                 if group == 2:
                     msg = msg + "202" + str(year)
+        #print(msg)
         return msg
 
 
