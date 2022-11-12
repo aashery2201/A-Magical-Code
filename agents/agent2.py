@@ -441,10 +441,10 @@ class Agent:
                 msg = self.decode_w_vocab(b[:-2], group=group, partial=partial)
             else:
                 msg = self.decode_default(b[:-2], group=group)
-            if partial:
+            if partial and msg != 'NULL':
                 msg  = 'PARTIAL: ' + msg
             else:
-                if group == 2:
+                if group == 2 and msg != 'NULL':
                     msg = msg + "202" + str(year)
         return msg
 
