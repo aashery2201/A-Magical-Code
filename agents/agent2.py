@@ -294,6 +294,8 @@ class Agent:
     def decode_w_vocab(self, b, group, partial=False):
         length = 4 if group == 3 else 3
         short_message = self.codec.decode(b)
+        if len(short_message) < 1:
+            return 'NULL'
         #print(short_message)
         decode_map = get_map(self.codec, 'decode', length, group)
         if group == 3:
@@ -434,7 +436,7 @@ class Agent:
         if n_decode > N_MAX:
             msg = "NULL"
         else:
-            group = g
+            group = choice
             if group == 3 or group >= 5:
                 msg = self.decode_w_vocab(b[:-2], group=group, partial=partial)
             else:
